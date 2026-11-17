@@ -1274,8 +1274,7 @@ function productImgFallback(img,slug){img.onerror=null;if(window.HORUS_PRODUCT_I
       <div class="enq-form">
         <h3>Send an enquiry</h3>
         <p class="small muted" style="margin:0">Fields marked <span style="color:var(--error);font-weight:600">*</span> are required.</p>
-        <form id="enq-form" name="enquiry" method="POST" data-netlify="true" netlify-honeypot="website" novalidate>
-          <input type="hidden" name="form-name" value="enquiry">
+        <form id="enq-form" novalidate>
           <div class="alert alert-error" id="f-summary" role="alert" tabindex="-1"><svg><use href="#i-warn"/></svg><div><p><strong>Please check the form.</strong></p><p id="f-summary-txt"></p></div></div>
           <div class="fgrid">
             <div class="fld"><label for="f-name">Full name <span class="req" aria-hidden="true">*</span><span class="sr-only">(required)</span></label><input id="f-name" name="name" type="text" autocomplete="name" maxlength="100" required aria-describedby="e-name"><span class="err" id="e-name"><svg><use href="#i-warn"/></svg><span></span></span></div>
@@ -1422,10 +1421,11 @@ function productImgFallback(img,slug){img.onerror=null;if(window.HORUS_PRODUCT_I
    (add &formfail to simulate a delivery failure).
    ========================================================= */
 var FORM_ENDPOINT = '';
-/* Live site (Netlify, 16 Nov 2026): enquiries are sent to Netlify Forms (form name "enquiry"), which stores
-   each submission and emails it to the address set in Netlify > Project configuration > Forms > Form notifications.
-   Success is shown only when Netlify answers with HTTP 2xx. On localhost the form is not sent (see below). */
-var FORM_NETLIFY = location.protocol!=='file:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+/* Live site (GitHub Pages, 17 Nov 2026): enquiries are sent through Web3Forms (web3forms.com, free plan),
+   which emails each enquiry to the inbox the access key was created for. The access key is designed to be public
+   (it only allows sending to that inbox). Success is shown only when Web3Forms answers {"success":true}.
+   While WEB3FORMS_KEY is empty, nothing is sent: the form offers a pre-filled email instead. */
+var WEB3FORMS_KEY = 'a0b0c1a6-5f8c-499a-944b-f84807726eda';
 if(!FORM_ENDPOINT && /[?&]formtest\b/.test(location.search) && /^(localhost|127\.0\.0\.1)$/.test(location.hostname)) FORM_ENDPOINT='/api/enquiry-test'+(/[?&]formfail\b/.test(location.search)?'?fail=1':'');
 var CONTACT = {email:'info@horusinnovations.com', phone:'+91 9711927171', tel:'+919711927171'};
 
@@ -2118,20 +2118,21 @@ form.addEventListener('submit',function(e){
   if($('#f-web').value){ return; }          // spam trap: hidden field only bots fill in
   var key=$('#f-interest').value;
   var data={name:$('#f-name').value.trim(),organisation:$('#f-org').value.trim(),email:$('#f-email').value.trim(),phone:$('#f-phone').value.trim(),interest:labelOf(key),interest_key:key,message:$('#f-msg').value.trim(),consent:true};
-  if(FORM_NETLIFY){
+  if(WEB3FORMS_KEY){
     var fp0=fingerprint(data);
     if(sentRecently(fp0)){
       $('#f-info-body').innerHTML='<p><strong>This enquiry has already been sent.</strong> Our team has it and will reply by email. To add something, change your message and send again.</p>';
       var i0=$('#f-info'); i0.classList.add('show'); i0.focus(); return;
     }
-    var fd=new URLSearchParams();
-    fd.append('form-name','enquiry'); fd.append('name',data.name); fd.append('organisation',data.organisation); fd.append('email',data.email);
-    fd.append('phone',data.phone); fd.append('interest',data.interest); fd.append('message',data.message); fd.append('consent','Yes'); fd.append('website','');
+    var payload={access_key:WEB3FORMS_KEY, subject:'Website enquiry: '+data.interest, from_name:'Horus Innovations website',
+      name:data.name, email:data.email, replyto:data.email, organisation:data.organisation, phone:data.phone,
+      interest:data.interest, message:data.message, consent:'Yes', page:location.href.split('#')[0], botcheck:''};
     setSending(true);
     var c0=window.AbortController?new AbortController():null, t0=setTimeout(function(){if(c0)c0.abort();},20000);
-    fetch('/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd.toString(),signal:c0?c0.signal:undefined})
-      .then(function(r){
-        if(!r.ok) throw new Error('The server did not confirm delivery (error '+r.status+').');
+    fetch('https://api.web3forms.com/submit',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload),signal:c0?c0.signal:undefined})
+      .then(function(r){return r.json().catch(function(){return {};}).then(function(j){return {ok:r.ok,status:r.status,j:j};});})
+      .then(function(res){
+        if(!(res.ok&&res.j&&res.j.success===true)) throw new Error('The server did not confirm delivery (error '+res.status+').');
         rememberSent(fp0); form.reset(); submitted=false; formStart=Date.now();
         $('#f-ok-test').hidden=true;
         var o=$('#f-ok'); o.classList.add('show'); o.focus();
