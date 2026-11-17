@@ -213,9 +213,10 @@ body.lock{overflow:hidden}
 :root{--electric:#1E8BFF;--electric-d:#1468E0}
 .vhero{min-height:max(640px,100vh);min-height:max(640px,100svh);background:#050C1C}
 .vhero::before{background:linear-gradient(100deg,#050C1C 0%,var(--navy) 60%,#10306E 100%)}
-.hero-media{position:absolute;inset:0;z-index:-1;overflow:hidden;background:#07101F url(assets/videos/horus-hero-poster.jpg) 60% 50%/cover no-repeat}
+.hero-media{position:absolute;inset:0;z-index:-1;overflow:hidden;background:#07101F url(assets/videos/horus-hero-poster-start.jpg) 50% 50%/cover no-repeat}
 .hero-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:60% 50%;opacity:0;transition:opacity 1.2s var(--ease)}
 .hero-video.ready{opacity:1}
+.hero-video.hv-zoom{object-position:50% 50%;transform:scale(1.2)}
 .hero-shade{position:absolute;inset:0;z-index:-1;pointer-events:none;background:
   linear-gradient(90deg,rgba(4,10,26,.92) 0%,rgba(4,10,26,.78) 30%,rgba(6,16,40,.34) 58%,rgba(6,16,40,.06) 100%),
   linear-gradient(180deg,rgba(4,10,26,.75) 0%,rgba(4,10,26,.3) 16%,rgba(4,10,26,0) 34%,rgba(4,10,26,0) 70%,rgba(4,10,26,.6) 100%),
@@ -1000,12 +1001,16 @@ function productImgFallback(img,slug){img.onerror=null;if(window.HORUS_PRODUCT_I
 <section class="hero vhero dark" id="top" aria-labelledby="hero-h">
   <!-- Hero videos: two client clips first, then the original hero video from horusinnovations.com (web-optimised copies in assets/videos/). Sources are attached by script after page load. -->
   <div class="hero-media" aria-hidden="true">
-    <video class="hero-video hv" muted playsinline preload="none" poster="assets/videos/horus-hero-poster.jpg"
+    <video class="hero-video hv hv-zoom" muted playsinline preload="none"
+      data-src="assets/videos/horus-hero-insert.mp4" disablepictureinpicture></video>
+    <video class="hero-video hv" muted playsinline preload="none"
       data-src="assets/videos/horus-hero-intro-2.mp4" disablepictureinpicture></video>
     <video class="hero-video hv" muted playsinline preload="none"
       data-src="assets/videos/horus-hero-intro.mp4" disablepictureinpicture></video>
     <video class="hero-video hv" muted playsinline preload="none"
-      data-src="assets/videos/horus-hero-1080p-web.mp4" data-src-sm="assets/videos/horus-hero-720p-web.mp4" disablepictureinpicture></video>
+      data-src="assets/videos/horus-hero-1080p-web.mp4" data-src-sm="assets/videos/horus-hero-720p-web.mp4" data-sequence="0-4.25,insert,20-end,4.25-19.2" disablepictureinpicture></video>
+    <video class="hero-video hv-insert hv-zoom" muted playsinline preload="none"
+      data-src="assets/videos/horus-hero-insert.mp4" disablepictureinpicture></video>
   </div>
   <div class="hero-shade" aria-hidden="true"></div>
   <div class="wrap hero-inner">
@@ -2207,10 +2212,14 @@ onScroll();
 })();
 </script>
 <script>
-/* Hero background video playlist (client request, 15 Nov 2026), played in this order and repeated:
+/* Hero background video playlist (client request, 15 Nov 2026; updated 17 Nov 2026), played in this order and repeated:
+     0. assets/videos/horus-hero-insert.mp4    (client clip, added first on 17 Nov 2026)
      1. assets/videos/horus-hero-intro-2.mp4   (client clip)
      2. assets/videos/horus-hero-intro.mp4     (client clip)
-     3. original hero video from horusinnovations.com (H.264, fast-start; 1080p, or 720p on narrow screens)
+     3. original hero video from horusinnovations.com (H.264, fast-start; 1080p, or 720p on narrow screens).
+        It plays in this order (data-sequence, client request 17 Nov 2026): runway take-off (0-4.25 s) ->
+        assets/videos/horus-hero-insert.mp4 (client clip) -> beach launch (20 s to the end) -> sky and aerial
+        footage (4.25-19.2 s). The insert clip has black side bars in the file; CSS zooms it so it fills the frame.
    The clips are stacked <video class="hero-video hv"> elements in that order and cross-fade, so there is no
    black flash between them. Attached after the page has loaded so it never delays first paint; paused while
    the hero is off screen; visitors can pause it with the button. A clip that cannot load is skipped; if none
@@ -2226,10 +2235,33 @@ onScroll();
   });
   function play(el){ var p=el.play(); if(p&&p.catch) p.catch(function(){}); }
   function sync(){ if(!cur) return; if(visible&&!userPaused&&!document.hidden){ if(cur.paused) play(cur); } else if(!cur.paused) cur.pause(); }
-  function show(el){
-    cur=el; el.currentTime=0; el.classList.add('ready');
-    vids.forEach(function(o){ if(o!==el){ o.classList.remove('ready'); if(!o.paused) o.pause(); } });
+  var ins=document.querySelector('.hero-media .hv-insert'), insOk=!!ins;
+  function show(el,keep){
+    cur=el; if(!keep){ el.hvStep=0; el.currentTime=el.hvSeq?el.hvSeq[0].a:0; } el.classList.add('ready');
+    vids.concat(ins?[ins]:[]).forEach(function(o){ if(o!==el){ o.classList.remove('ready'); if(!o.paused) o.pause(); } });
     if(btn) btn.hidden=false; sync();
+  }
+  function parseSeq(v){ /* "0-4.25,insert,20-end" -> [{a:0,b:4.25},{ins:1},{a:20,b:Infinity}] */
+    return v.dataset.sequence.split(',').map(function(p){ p=p.trim(); if(p==='insert') return {ins:1};
+      var q=p.split('-'); return {a:parseFloat(q[0]), b:q[1]==='end'?Infinity:parseFloat(q[1])}; });
+  }
+  function nextRange(v,from){ for(var i=from;i<v.hvSeq.length;i++){ if(!v.hvSeq[i].ins) return v.hvSeq[i]; } return null; }
+  function advance(v){ /* move the main clip to the next step of its sequence */
+    v.hvStep++;
+    if(v.hvStep>=v.hvSeq.length){ var n=nextOk(v); if(n) show(n); return; }
+    var st=v.hvSeq[v.hvStep];
+    if(st.ins){
+      if(!insOk||!ins||ins.readyState<2){ advance(v); return; }
+      var nr=nextRange(v,v.hvStep+1); v.pause(); if(nr) v.currentTime=nr.a;  /* pre-seek behind the insert */
+      ins.hvReturn=v; show(ins); return;
+    }
+    if(Math.abs(v.currentTime-st.a)>0.05) v.currentTime=st.a;
+    if(cur!==v) show(v,true); else sync();
+  }
+  function checkSeq(v,t){
+    if(v!==cur||!v.hvSeq) return;
+    var st=v.hvSeq[v.hvStep]; if(!st||st.ins) return;
+    if(st.b!==Infinity && t>=st.b-0.02) advance(v);
   }
   function nextOk(from){ /* the next clip after `from` that has not failed, wrapping round */
     var i=vids.indexOf(from);
@@ -2240,7 +2272,7 @@ onScroll();
   function start(){
     vids.forEach(function(v){
       v.muted=true; v.defaultMuted=true;
-      v.addEventListener('ended',function(){ if(v===cur){ var n=nextOk(v); if(n) show(n); } });
+      v.addEventListener('ended',function(){ if(v!==cur) return; if(v.hvSeq){ advance(v); return; } var n=nextOk(v); if(n) show(n); });
       v.addEventListener('error',function(){
         v.hvTry++;
         if(v.hvTry<v.hvSources.length){ load(v); return; }
@@ -2249,6 +2281,17 @@ onScroll();
         if(!vids.some(function(o){return o.hvOk;}) && btn) btn.remove();  /* poster background remains */
       });
       load(v);
+    });
+    if(ins){
+      ins.muted=true; ins.defaultMuted=true; ins.preload='auto'; ins.src=ins.dataset.src; ins.load();
+      ins.addEventListener('error',function(){ insOk=false; if(cur===ins&&ins.hvReturn) advance(ins.hvReturn); });
+      ins.addEventListener('ended',function(){ if(cur===ins&&ins.hvReturn) advance(ins.hvReturn); });
+    }
+    vids.forEach(function(v){
+      if(!v.dataset.sequence) return;
+      v.hvSeq=parseSeq(v); v.hvStep=0;
+      v.addEventListener('timeupdate',function(){ checkSeq(v,v.currentTime); });
+      if(v.requestVideoFrameCallback){ var cb=function(now,meta){ checkSeq(v,meta.mediaTime); v.requestVideoFrameCallback(cb); }; v.requestVideoFrameCallback(cb); }
     });
     show(vids[0]);
   }
