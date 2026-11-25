@@ -728,6 +728,12 @@ body.lock{overflow:hidden}
 .prod-hero{padding:calc(var(--hdr) + 32px) 0 var(--sec);background:var(--white)}
 .prod-hero .crumb-bar{background:var(--navy);margin:0 calc(var(--pad)*-1) 40px;padding:12px var(--pad);border-radius:var(--r)}
 .prod-grid{display:grid;grid-template-columns:7fr 5fr;gap:48px 56px;align-items:start}
+.pd-left{display:flex;flex-direction:column;gap:24px;min-width:0}
+.pd-video{border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;background:#E4E9F1}
+.pd-video video{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;transform:scale(1.03)}
+.pd-seq{position:relative;aspect-ratio:16/9}
+.pd-seq video{position:absolute;inset:0;height:100%;opacity:0;transition:opacity .45s ease}
+.pd-seq video.on{opacity:1}
 .gal-main{position:relative;aspect-ratio:4/3;background:var(--ice);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;display:grid;place-items:center;color:var(--royal)}
 .gal-main .bp{position:absolute;inset:0;background-image:linear-gradient(rgba(29,78,216,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(29,78,216,.07) 1px,transparent 1px);background-size:32px 32px}
 .gal-main .slide{position:absolute;inset:0;display:grid;place-items:center;padding:8%;opacity:0;transition:opacity .35s}
@@ -1483,6 +1489,9 @@ var P = [
  {slug:'vinashaka-10', name:'Vinashaka-10', type:'fixed-wing', sub:null, mission:'strike', no:2,
   descriptor:'Kamikaze Medium Range UAV',
   img:'assets/products/vinashaka-10-official.webp', imgW:794, imgH:463,
+  /* client request 25 Nov 2026: car launch clip, then the hero clip's aerial sky footage (without its runway launch),
+     then the clip with the drone in the sky (same file as the hero insert clip), zoomed past its black side bars */
+  video:{w:1920, h:1080, list:[{src:'assets/products/videos/vinashaka-10-a-1080.mp4'},{src:'assets/videos/horus-hero-1080p-web.mp4', start:4.85, end:19.0},{src:'assets/videos/horus-hero-insert.mp4', zoom:1.24}]},
   alt:'Vinashaka-10 fixed-wing UAV with swept wings, canards and rear propeller',
   summary:'Medium-range autonomous precision strike UAS optimized for cost-effective tactical flexibility.',
   desc:['Vinashaka-10 is a medium-range autonomous precision strike UAS optimized for cost-effective tactical flexibility and developed by Horus Innovations.',
@@ -1543,6 +1552,7 @@ var P = [
  {slug:'sarvsetu-vtol', name:'Sarvsetu VTOL', type:'fixed-wing', sub:'VTOL', mission:'isr', no:5,
   descriptor:'Advanced ISR & Airborne Communication Relay UAV',
   img:'assets/products/sarvsetu-official-v2.webp', imgW:1463, imgH:615,
+  video:{src:'assets/products/videos/sarvsetu-vtol.mp4', w:848, h:474},
   alt:'Sarvsetu VTOL UAV with straight wings, black wingtips, four lift rotors on wing booms, nose camera and propeller',
   summary:'Long-endurance tactical fixed-wing UAV providing persistent ISR and airborne communication relay for modern defence operations.',
   desc:['Sarvsetu is a long-endurance tactical fixed-wing UAV engineered to provide persistent Intelligence, Surveillance & Reconnaissance (ISR) and Airborne Communication Relay capabilities for modern defence operations.',
@@ -1562,6 +1572,7 @@ var P = [
  {slug:'ateev', name:'Ateev', type:'fixed-wing', sub:null, mission:'training', no:6,
   descriptor:'Aerial Target System',
   img:'assets/products/ateev.webp', imgW:1136, imgH:454,
+  video:{src:'assets/products/videos/ateev.mp4', w:848, h:482},
   alt:'Ateev aerial target system with yellow wings, tailplane and nose, a red fuselage and a black propeller',
   summary:'High-endurance fixed-wing aerial target system for military training, weapon evaluation and air defence exercises.',
   desc:['Ateev is a high-endurance fixed-wing Aerial Target System developed for military training, weapon evaluation, and air defence exercises. Engineered to simulate realistic airborne threats, it enables effective live-fire training and operational readiness.',
@@ -1581,6 +1592,7 @@ var P = [
  {slug:'vyomlakshya-1', name:'Vyomlakshya-1', type:'fixed-wing', sub:null, mission:'training', no:7,
   descriptor:'Aerial Target System',
   img:'assets/products/vyomlakshya-1-official.webp', imgW:915, imgH:554,
+  video:{src:'assets/products/videos/vyomlakshya-1.mp4', w:852, h:480},
   alt:'Vyomlakshya-1 aerial target drone with swept wings, twin fins and black stripes',
   summary:'Lightweight, autonomous aerial target drone for realistic air defence training and weapon system evaluation.',
   desc:['Vyomlakshya-1 is a lightweight, autonomous aerial target drone developed by Horus Innovations for realistic air defence training and weapon system evaluation.',
@@ -1750,6 +1762,28 @@ function specRows(p,vals){
     return '<div class="sgroup"><h3>'+g[0]+'</h3><dl>'+rows+'</dl></div>';
   }).join('');
 }
+/* Product video sequences (p.video.list): plays each clip (or its start-end part) in turn, silently, on a loop,
+   cross-fading between stacked <video> elements so there is no black gap. */
+function initPdSeq(root){
+  var box=root&&root.querySelector('.pd-seq'); if(!box) return;
+  var vids=[].slice.call(box.querySelectorAll('video')), i=0;
+  function st(v){ return parseFloat(v.dataset.start)||0; }
+  function go(k){
+    i=k; var v=vids[k], n=vids[(k+1)%vids.length];
+    if(Math.abs(v.currentTime-st(v))>0.05) v.currentTime=st(v);
+    vids.forEach(function(o,j){ o.classList.toggle('on',j===k); if(j!==k&&!o.paused) o.pause(); });
+    var p=v.play(); if(p&&p.catch) p.catch(function(){});
+    if(n!==v) n.currentTime=st(n);   /* pre-seek the next clip so it is ready */
+  }
+  function check(v,k,t){ if(k===i&&v.dataset.end&&t>=parseFloat(v.dataset.end)) go((k+1)%vids.length); }
+  vids.forEach(function(v,k){
+    v.muted=true; v.defaultMuted=true;
+    v.addEventListener('ended',function(){ if(k===i) go((k+1)%vids.length); });
+    v.addEventListener('timeupdate',function(){ check(v,k,v.currentTime); });
+    if(v.requestVideoFrameCallback){ var cb=function(now,m){ check(v,k,m.mediaTime); v.requestVideoFrameCallback(cb); }; v.requestVideoFrameCallback(cb); }
+  });
+  go(0);
+}
 function renderProduct(slug){
   var p=BY[slug]; if(!p) return false;
   var related=P.filter(function(x){return x.slug!==p.slug&&x.mission===p.mission;});
@@ -1762,8 +1796,10 @@ function renderProduct(slug){
    '<div class="crumb-bar"><a class="back" href="#/platforms">'+ico('i-back')+'All platforms</a>'+
    '<nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="#/">Home</a></li><li><a href="#/platforms">Platforms</a></li><li><a href="#/platforms?mission='+p.mission+'">'+esc(MISSIONS[p.mission].label)+'</a></li><li><span aria-current="page">'+esc(p.name)+'</span></li></ol></nav></div>'+
    '<div class="prod-grid">'+
-    '<div class="pd-media"><span class="cat">'+esc(MISSIONS[p.mission].label)+'</span><span class="lbl">'+esc(TYPES[p.type])+' · '+pad(p.no)+'</span>'+
+    '<div class="pd-left"><div class="pd-media"><span class="cat">'+esc(MISSIONS[p.mission].label)+'</span><span class="lbl">'+esc(TYPES[p.type])+' · '+pad(p.no)+'</span>'+
      '<img src="'+p.img+'" onerror="productImgFallback(this,\''+p.slug+'\')" width="'+p.imgW+'" height="'+p.imgH+'" alt="'+esc(p.alt)+'" fetchpriority="high"></div>'+
+     (p.video&&p.video.list?'<div class="pd-video pd-seq">'+p.video.list.map(function(it,i){return '<video src="'+it.src+'"'+(it.start!=null?' data-start="'+it.start+'"':'')+(it.end!=null?' data-end="'+it.end+'"':'')+(it.zoom?' style="transform:scale('+it.zoom+')"':'')+' muted playsinline disablepictureinpicture preload="auto" onvolumechange="this.muted=true"'+(i?'':' class="on"')+' aria-label="'+esc(p.name)+' flight video"></video>';}).join('')+'</div>':'')+
+     (p.video&&!p.video.list?'<div class="pd-video"><video src="'+p.video.src+'" width="'+p.video.w+'" height="'+p.video.h+'" autoplay muted loop playsinline disablepictureinpicture preload="metadata" onvolumechange="this.muted=true" aria-label="'+esc(p.name)+' flight video"></video></div>':'')+'</div>'+
     '<div class="pinfo"><span class="lbl">'+esc(MISSIONS[p.mission].label)+' · '+typeLabel(p)+' · '+pad(p.no)+'</span>'+
      '<h1 class="h1" tabindex="-1">'+esc(p.name)+'</h1>'+(p.descriptor?'<p class="role">'+esc(p.descriptor)+'</p>':'')+
      p.desc.map(function(d){return typeof d==='string'?'<p class="descr">'+esc(d)+'</p>':'';}).join('')+
@@ -1914,7 +1950,7 @@ function route(hashArg){
   if(qi>-1){query=path.slice(qi+1);path=path.slice(0,qi);}
   var seg=path.split('/').filter(Boolean);
   if(seg.length===0){show('home');document.title='Horus Innovations | Indigenous Defence UAV Systems, Engineered in India';window.scrollTo(0,0);revealCheck();return;}
-  if(seg[0]==='platforms'&&seg[1]){ if(renderProduct(seg[1])){show('product');window.scrollTo(0,0);focusHeading($('#product-root'));revealCheck();return;} }
+  if(seg[0]==='platforms'&&seg[1]){ if(renderProduct(seg[1])){show('product');initPdSeq($('#product-root'));window.scrollTo(0,0);focusHeading($('#product-root'));revealCheck();return;} }
   if(seg[0]==='platforms'){show('catalogue');renderCatalogue(query);document.title='Platforms: Next-Generation Tactical UAS | Horus Innovations';window.scrollTo(0,0);focusHeading($('[data-view="catalogue"]'));return;}
   if(seg[0]==='solutions'&&seg[1]&&renderSolution(seg[1])){show('solution');window.scrollTo(0,0);focusHeading($('#solution-root'));revealCheck();return;}
   if(seg[0]==='privacy'){show('privacy');document.title='Privacy notice | Horus Innovations';window.scrollTo(0,0);focusHeading($('[data-view="privacy"]'));return;}
